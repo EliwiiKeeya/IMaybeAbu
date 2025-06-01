@@ -1,0 +1,8 @@
+pipx
+nb-cli
+nonebot-adapter-discord
+nonebot2[httpx]
+nonebot2[websockets]
+opencv-python
+qrcode
+pillow
