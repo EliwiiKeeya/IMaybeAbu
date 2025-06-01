@@ -1,15 +1,7 @@
-﻿import asyncio
-from typing import Optional
-
-from nonebot.adapters.discord import MessageSegment
+﻿from nonebot.adapters.discord import MessageSegment
 
 from nonebot.adapters.discord.api import (
-    IntegerOption,
-    NumberOption,
     StringOption,
-    SubCommandOption,
-    User,
-    UserOption,
     File,
 )
 from nonebot.adapters.discord.commands import (
