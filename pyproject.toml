@@ -1,0 +1,14 @@
+[project]
+name = "IMaybeAbu"
+version = "0.1.0"
+description = "IMaybeAbu"
+readme = "README.md"
+requires-python = ">=3.9, <4.0"
+
+[tool.nonebot]
+adapters = [
+    { name = "Discord", module_name = "nonebot.adapters.discord" }
+]
+plugins = []
+plugin_dirs = ["src/plugins"]
+builtin_plugins = ["echo"]
