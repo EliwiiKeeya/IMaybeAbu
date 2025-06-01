@@ -7,7 +7,7 @@ RUN apt update
 RUN apt install libgl-dev libglib2.0-0 -y
 RUN apt clean
 
-RUN pip3 install -r requirements.txt -i https://mirrors.tuna.tsinghua.edu.cn/pypi/web/simple
+RUN pip3 install -r requirements.txt
 RUN pip3 cache purge
 
 # ENTRYPOINT [ "/bin/bash" ]
