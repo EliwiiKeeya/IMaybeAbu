@@ -2,7 +2,7 @@ FROM python:3.10.17-slim-bookworm
 
 WORKDIR /app
 
-COPY * /app
+COPY . .
 RUN apt update 
 RUN apt install libgl-dev libglib2.0-0 -y
 RUN apt clean
