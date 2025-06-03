@@ -6,3 +6,5 @@ nonebot2[websockets]
 opencv-python
 qrcode
 pillow
+ujson
+opencc
