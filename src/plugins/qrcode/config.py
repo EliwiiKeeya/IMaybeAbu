@@ -5,6 +5,7 @@ import qrcode
 import numpy as np
 from PIL import Image
 
+
 class QRCodeAbu:
     BOX_SIZE = 10
     BORDER = 0
@@ -18,7 +19,6 @@ class QRCodeAbu:
         result_pil = Image.fromarray(cv2.cvtColor(result, cv2.COLOR_BGRA2RGBA))
         output_buffer = BytesIO()
         result_pil.save(output_buffer, format='PNG')
-        output_buffer.seek(0)
         return output_buffer.getvalue()
 
     # 生成二维码
@@ -40,8 +40,9 @@ class QRCodeAbu:
     def replace_qr_with_image(cls, qr_array):
         # 读取并缩放素材图片
         img = cv2.imread(cls.IMAGE_PATH)
-        img_resized = cv2.resize(img, (cls.BOX_SIZE, cls.BOX_SIZE))  # 缩放为单位色块大小
-        
+        img_resized = cv2.resize(
+            img, (cls.BOX_SIZE, cls.BOX_SIZE))  # 缩放为单位色块大小
+
         # 创建新图像以放置替换后的内容
         qr_height, qr_width = qr_array.shape
         new_img = np.ones((qr_height, qr_width, 3), dtype=np.uint8) * 255
@@ -49,7 +50,8 @@ class QRCodeAbu:
         for x in range(cls.BOX_SIZE * cls.BORDER, qr_height - cls.BOX_SIZE * cls.BORDER, cls.BOX_SIZE):
             for y in range(cls.BOX_SIZE * cls.BORDER, qr_height - cls.BOX_SIZE * cls.BORDER, cls.BOX_SIZE):
                 if qr_array[x, y] == 0:
-                    new_img[x: x + cls.BOX_SIZE, y: y + cls.BOX_SIZE] = img_resized
+                    new_img[x: x + cls.BOX_SIZE, y: y +
+                            cls.BOX_SIZE] = img_resized
 
         return new_img
 
@@ -70,4 +72,3 @@ if __name__ == '__main__':
     output = QRCodeAbu.excute(data)
     with open('src/plugins/qrcode/output.png', 'wb') as f:
         f.write(output)
-    
