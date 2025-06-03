@@ -1,1 +1,2 @@
-src/plugins/*/__pycache__
+resources
+**/__pycache__
