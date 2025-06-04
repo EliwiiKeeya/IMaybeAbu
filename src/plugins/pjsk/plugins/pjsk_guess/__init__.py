@@ -74,6 +74,9 @@ async def handle_guess_begin(event: GuildMessageCreateEvent) -> None:
     channel_guessing_status[channel_id]["music_names"] = music_names
 
     # 等待用户猜测
+    handle = channel_guessing_status[channel_id]["is_guessing_sleep_task_handle"]
+    if handle is not None and not handle.done():
+        handle.cancel()
     handle = asyncio.create_task(asyncio.sleep(50))
     channel_guessing_status[channel_id]["is_guessing_sleep_task_handle"] = handle
     await handle
