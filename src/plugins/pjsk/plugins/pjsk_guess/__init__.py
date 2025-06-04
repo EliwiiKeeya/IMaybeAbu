@@ -109,9 +109,6 @@ async def handle_guess_user_guess(event: GuildMessageCreateEvent) -> None:
 
     # 匹配用户猜测内容
     music_names = LibPjskGuess.get_best_match(guess_content, guess_data)
-    print(f"[PJSK Guess] | 用户猜测: {guess_content} -> 匹配曲目: {music_names}")
-    music_name_edited = LibPjskGuess.get_music_name_for_message(
-        channel_guessing_status[channel_id]["music_names"])
     if channel_guessing_status[channel_id]["music_names"] in music_names:
         # 用户猜测正确
         jacket = channel_guessing_status[channel_id]["jacket"]
@@ -126,10 +123,12 @@ async def handle_guess_user_guess(event: GuildMessageCreateEvent) -> None:
         channel_guessing_status[channel_id]["is_guessing_sleep_task_handle"] = None
 
         # 发送用户猜测正确消息
+        music_name_edited = LibPjskGuess.get_music_name_for_message(channel_guessing_status[channel_id]["music_names"])
         info_correct = LibPjskGuess.INFO_CORRECT + music_name_edited
         await guess_user_guess.finish(message_reference + info_correct + jacket)
     else:
         # 发送用户猜测错误信息
+        music_name_edited = LibPjskGuess.get_music_name_for_message(music_names[0])
         info_incorrect = f"{LibPjskGuess.INFO_INCORRECT}**{music_name_edited}**哦"
         await guess_user_guess.finish(message_reference + info_incorrect)
 
