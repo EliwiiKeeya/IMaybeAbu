@@ -117,15 +117,15 @@ async def handle_guess_user_guess(event: GuildMessageCreateEvent) -> None:
         channel_guessing_status[channel_id]["is_guessing"] = False
         channel_guessing_status[channel_id]["is_guessing_sleep_task_handle"].cancel()
 
-        # 清理频道猜曲状态
-        channel_guessing_status[channel_id]["jacket"] = None
-        channel_guessing_status[channel_id]["music_names"] = None
-        channel_guessing_status[channel_id]["is_guessing_sleep_task_handle"] = None
-
         # 发送用户猜测正确消息
         music_name_edited = LibPjskGuess.get_music_name_for_message(channel_guessing_status[channel_id]["music_names"])
         info_correct = LibPjskGuess.INFO_CORRECT + music_name_edited
         await guess_user_guess.finish(message_reference + info_correct + jacket)
+
+        # 清理频道猜曲状态
+        channel_guessing_status[channel_id]["jacket"] = None
+        channel_guessing_status[channel_id]["music_names"] = None
+        channel_guessing_status[channel_id]["is_guessing_sleep_task_handle"] = None
     else:
         # 发送用户猜测错误信息
         music_name_edited = LibPjskGuess.get_music_name_for_message(music_names[0])
