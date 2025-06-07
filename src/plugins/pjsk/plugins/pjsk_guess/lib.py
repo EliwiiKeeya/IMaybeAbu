@@ -26,7 +26,7 @@ if MONGO_DB_URI_:
         MONGO_DB_CLIENT_ = None
 
 
-class LibPjskGuess(Exception):
+class LibPJSKGuess(Exception):
     # 信息常量
     INFO_BEGIN = "PJSK曲绘竞猜 (随机裁切)\n使用横杠\"-\"加答案以参加猜曲\n\n你有60秒的时间回答\n可手动发送“结束猜曲”来结束猜曲\n\nJacket guess, answer by \"-\" + song name, send \"endpjskguess\" to end"
     INFO_ON_GUESSING = "已经开始猜曲!"
@@ -86,7 +86,7 @@ class LibPjskGuess(Exception):
     @staticmethod
     def do_random_crop(jacket: PIL.Image.Image, size: int = 140) -> PIL.Image.Image:
         """
-        随机裁剪封面图片为指定大小的正方形。
+        随机裁剪封面图片为指定大小的正方形.
         Args:
             jacket (PIL.Image.Image): 原始封面图片.
             size (int): 裁剪后的正方形大小，默认为140像素.
@@ -102,7 +102,7 @@ class LibPjskGuess(Exception):
     @staticmethod
     def load_music_name_data() -> Dict[str, str]:
         """
-        加载曲目名称数据。
+        加载曲目名称数据.
         Returns:
             data (Dict[str, str]): 曲目名称数据列表.
         """
@@ -116,7 +116,7 @@ class LibPjskGuess(Exception):
     @staticmethod
     def get_best_match(alias: str, data: Dict[str, str]) -> List[List[str]]:
         """
-        在数据中找到与别名最匹配的曲目id和曲目名称列表。
+        在数据中找到与别名最匹配的曲目id和曲目名称列表.
         Args:
             alias (str): 用户输入的别名.
             data (list): 曲目数据列表.            
@@ -124,30 +124,37 @@ class LibPjskGuess(Exception):
             music_names (List[str]): 最匹配的3个曲目名称列表.
         """
         music_names = list(data.keys())
-        best_match = difflib.get_close_matches(alias.lower(), music_names, n=3, cutoff=0)
+        best_match = difflib.get_close_matches(
+            alias.lower(),
+            music_names,
+            n=3,
+            cutoff=0
+        )
         music_ids = [data[name] for name in best_match if name in data]
-        music_names = [METADATA_.get(music_id, list()) for music_id in music_ids]
+        music_names = [
+            METADATA_.get(music_id, list()) for music_id in music_ids
+        ]
 
         return music_names
 
     @staticmethod
-    def get_music_name_for_message(music_names: List[str]) -> str:
+    def get_music_names_for_message(music_names: List[str]) -> str:
         """
-        编辑曲目名称以适应显示。
+        编辑曲目名称以适应显示.
         Args:
             music_names (str): 原始曲目名称.
         Returns:
-            music_name_edited (str): 编辑后的曲目名称.
+            music_names_edited (str): 编辑后的曲目名称.
         """
         match len(music_names):
             case 1:
-                music_name_edited = f"**{music_names[0]}**"
+                music_names_edited = f"**{music_names[0]}**"
             case 2:
-                music_name_edited = f"**{music_names[0]}({music_names[1]})**"
+                music_names_edited = f"**{music_names[0]}({music_names[1]})**"
             case 3:
-                music_name_edited = f"**{music_names[0]}({music_names[1]}/{music_names[2]})**"
+                music_names_edited = f"**{music_names[0]}({music_names[1]}/{music_names[2]})**"
 
-        return music_name_edited
+        return music_names_edited
 
     @staticmethod
     async def update_score_guess_jacket(user_id: int, user_name: str, guild_id: str) -> None:
@@ -243,28 +250,28 @@ class LibPjskGuess(Exception):
 
 if __name__ == '__main__':
     # 谱面抽取测试
-    # jacket, music_name = LibPjskGuess.get_random_jacket()
+    # jacket, music_name = LibPJSKGuess.get_random_jacket()
     # print(f"Music Name: {music_name}")
     # jacket.show()
-    # jacket = LibPjskGuess.do_random_crop(jacket, size=140)
+    # jacket = LibPJSKGuess.do_random_crop(jacket, size=140)
     # jacket.show()
 
     # 曲名数据读取测试
     # import sys
-    # music_name_data = LibPjskGuess.load_music_name_data()
+    # music_name_data = LibPJSKGuess.load_music_name_data()
     # print(f"Loaded {len(music_name_data)} music names.")
     # print(f"music_name_data size: {sys.getsizeof(music_name_data)} bytes")
     # print(f"Sample data: {list(music_name_data.items())[:5]}")
 
     # 测试简体中文转换
     # text_tw = "世劃啟動"
-    # text_cn = LibPjskGuess.zh_tw_to_zh_cn(text_tw)
+    # text_cn = LibPJSKGuess.zh_tw_to_zh_cn(text_tw)
     # print(f"繁体中文: {text_tw} -> 简体中文: {text_cn}")
 
     # 测试最佳匹配
-    # data = LibPjskGuess.load_music_name_data()
+    # data = LibPJSKGuess.load_music_name_data()
     # alias = "喵"
-    # best_match = LibPjskGuess.get_best_match(alias, data)
+    # best_match = LibPJSKGuess.get_best_match(alias, data)
     # print(f"Best match for '{alias}': {best_match[0]}, Names: {best_match}")
 
     # 测试数据库连接
@@ -292,7 +299,7 @@ if __name__ == '__main__':
     #         isinstance(MONGO_DB_CLIENT_, pymongo.AsyncMongoClient), \
     #         "非预期的MongoDB调用, 请检查配置."
     #     client = MONGO_DB_CLIENT_
-    #     await LibPjskGuess.update_score_guess_jacket(2, "IMaybeAbu", "dev")
+    #     await LibPJSKGuess.update_score_guess_jacket(2, "IMaybeAbu", "dev")
     #     await client.close()
     #     print("Done.")
 
@@ -307,8 +314,8 @@ if __name__ == '__main__':
             "非预期的MongoDB调用, 请检查配置."
         client = MONGO_DB_CLIENT_
         guild_id = "dev"
-        data = await LibPjskGuess.get_ranking_guess_jacket(guild_id)
-        info_ranking = await LibPjskGuess.gen_ranking_guess_jacket_info(guild_id, data)
+        data = await LibPJSKGuess.get_ranking_guess_jacket(guild_id)
+        info_ranking = await LibPJSKGuess.gen_ranking_guess_jacket_info(guild_id, data)
         await client.close()
 
         print(info_ranking)
