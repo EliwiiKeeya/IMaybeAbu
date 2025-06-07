@@ -3,25 +3,54 @@ import os
 import random
 import difflib
 import requests
-from typing import Tuple, List, Dict
+import unicodedata
+from typing import Tuple, List, Dict, Optional, Any
 
 import opencc
+import pymongo
 import PIL.Image
 import ujson as json
 
-PATH_METADATA__ = "src/plugins/pjsk/plugins/pjsk_guess/sekai_viewer_jackets.json"
-with open(PATH_METADATA__, 'r', encoding='utf-8') as f:
+# 读取元数据
+PATH_METADATA_ = "src/plugins/pjsk/plugins/pjsk_guess/sekai_viewer_jackets.json"
+with open(PATH_METADATA_, 'r', encoding='utf-8') as f:
     METADATA_: Dict[str, List[str]] = json.load(f)
+
+# MongoDB 数据库配置 (可选, 猜曲排行依赖)
+MONGO_DB_URI_ = ""
+MONGO_DB_CLIENT_: Optional[pymongo.AsyncMongoClient]
+if MONGO_DB_URI_:
+    try:
+        MONGO_DB_CLIENT_ = pymongo.AsyncMongoClient(MONGO_DB_URI_)
+    except:
+        MONGO_DB_CLIENT_ = None
 
 
 class LibPjskGuess(Exception):
-    INFO_BEGIN = "PJSK曲绘竞猜 (随机裁切)\n使用横杠\"-\"加答案以参加猜曲\n\n你有50秒的时间回答\n可手动发送“结束猜曲”来结束猜曲\n\nJacket guess, answer by \"-\" + song name, send \"endpjskguess\" to end"
+    # 信息常量
+    INFO_BEGIN = "PJSK曲绘竞猜 (随机裁切)\n使用横杠\"-\"加答案以参加猜曲\n\n你有60秒的时间回答\n可手动发送“结束猜曲”来结束猜曲\n\nJacket guess, answer by \"-\" + song name, send \"endpjskguess\" to end"
     INFO_ON_GUESSING = "已经开始猜曲!"
     INFO_CORRECT = ":white_check_mark:您猜对了(Right answer)\n"
     INFO_INCORRECT = ":x:您猜错了(Wrong answer), 答案不是"
     INFO_END_TIMEOUT = "时间到, 正确答案: "
     INFO_END_USER = "正确答案: "
     INFO_NOT_ON_GUESSING = "当前没有猜曲哦"
+
+    # 状态位常量
+    IS_MONGO_DB_ENABLED = True if MONGO_DB_CLIENT_ else False
+
+    @staticmethod
+    def convert_text(text: str) -> str:
+        """
+        将繁体中文文本转换为简体中文文本, 将大写字母转换为小写.
+        Args:
+            text (str): 文本.
+        Returns:
+            text_converted: 转换后文本.
+        """
+        text_converted = opencc.OpenCC('t2s').convert(text)
+        text_converted = text_converted.lower()
+        return text_converted
 
     @staticmethod
     def get_random_jacket() -> Tuple[PIL.Image.Image, List[str]]:
@@ -71,19 +100,6 @@ class LibPjskGuess(Exception):
         return jacket_cropped
 
     @staticmethod
-    def convert_text(text: str) -> str:
-        """
-        将繁体中文文本转换为简体中文文本，将大写字母转换为小写。
-        Args:
-            text (str): 文本.
-        Returns:
-            text_converted: 转换后文本.
-        """
-        text_converted = opencc.OpenCC('t2s').convert(text)
-        text_converted = text_converted.lower()
-        return text_converted
-
-    @staticmethod
     def load_music_name_data() -> Dict[str, str]:
         """
         加载曲目名称数据。
@@ -96,8 +112,6 @@ class LibPjskGuess(Exception):
                 data[music_name.lower()] = music_id
 
         return data
-
-    from typing import Optional
 
     @staticmethod
     def get_best_match(alias: str, data: Dict[str, str]) -> List[List[str]]:
@@ -135,6 +149,97 @@ class LibPjskGuess(Exception):
 
         return music_name_edited
 
+    @staticmethod
+    async def update_score_guess_jacket(user_id: int, user_name: str, guild_id: str) -> None:
+        """
+        更新猜谱面成绩, 需MongoDB使能打开.
+        Args:
+            user_id (int): 用户id.
+            user_name (str): 要使用的用户昵称.
+            guild_id (str): 群组id.
+        """
+        # 查找用户字段
+        assert \
+            isinstance(MONGO_DB_CLIENT_, pymongo.AsyncMongoClient), \
+            "非预期的MongoDB调用, 请检查配置."
+        collection = MONGO_DB_CLIENT_["PJSK-Guess"][guild_id]
+        data = await collection.find_one({"user_id": user_id})
+
+        # 更新猜谱面成绩
+        if data:
+            if "score_guess_jacket" in data.keys():
+                await collection.update_one(
+                    data,
+                    {
+                        "$set": {
+                            "user_name": user_name,
+                            "score_guess_jacket": data["score_guess_jacket"] + 1
+                        }
+                    }
+                )
+            else:  # "score_guess_jacket" not in data.keys()
+                await collection.update_one(
+                    data,
+                    {
+                        "$set": {
+                            "user_name": user_name,
+                            "score_guess_jacket": 1
+                        }
+                    }
+                )
+        else:   # data is None
+            await collection.insert_one(
+                {
+                    "user_id": user_id,
+                    "user_name": user_name,
+                    "score_guess_jacket": 1
+                }
+            )
+
+    @staticmethod
+    async def get_ranking_guess_jacket(guild_id: str) -> List[Dict[str, Any]]:
+        """
+        获取猜谱面成绩排行, 需MongoDB使能打开.
+        Args:
+            guild_id (str): 群组id.
+        Returns:
+            ranking (List[Dict[str, Any]]): 群组前20名排行字典列表.
+        """
+        # 获取成绩
+        assert \
+            isinstance(MONGO_DB_CLIENT_, pymongo.AsyncMongoClient), \
+            "非预期的MongoDB调用, 请检查配置."
+        collection = MONGO_DB_CLIENT_["PJSK-Guess"][guild_id]
+        cursor = collection.find({"score_guess_jacket": {"$exists": True}}) \
+                           .sort("score_guess_jacket", pymongo.DESCENDING) \
+                           .limit(20)
+        ranking = [item async for item in cursor]
+
+        return ranking
+
+    @staticmethod
+    async def gen_ranking_guess_jacket_info(guild_id: str, data: List[Dict[str, Any]]) -> str:
+        """
+        生成猜谱面成绩排行, 需MongoDB使能打开.
+        Args:
+            guild_id (str): 群组id.
+            data (List[Dict[str, Any]]): 群组前20名排行字典列表.
+        Returns:
+            info_ranking (str): 群组前20名排行信息.
+        """
+        # 构建排行榜信息
+        info_ranking = f"{'排 名': <4}{'次 数':>8}{'ID':>8}\n"
+        for i, item in enumerate(data):
+            info_ranking += (
+                f"{str(i + 1):>4}"
+                "  "
+                f"{str(item['score_guess_jacket']) + ' 次':>8}"
+                "      "
+                f"{item['user_name']}\n"
+            )
+
+        return info_ranking.strip("\n")
+
 
 if __name__ == '__main__':
     # 谱面抽取测试
@@ -157,9 +262,57 @@ if __name__ == '__main__':
     # print(f"繁体中文: {text_tw} -> 简体中文: {text_cn}")
 
     # 测试最佳匹配
-    data = LibPjskGuess.load_music_name_data()
-    alias = "喵"
-    best_match = LibPjskGuess.get_best_match(alias, data)
-    print(f"Best match for '{alias}': {best_match[0]}, Names: {best_match}")
+    # data = LibPjskGuess.load_music_name_data()
+    # alias = "喵"
+    # best_match = LibPjskGuess.get_best_match(alias, data)
+    # print(f"Best match for '{alias}': {best_match[0]}, Names: {best_match}")
+
+    # 测试数据库连接
+    # import asyncio
+    # async def test_mongo_db_connect():
+    #     assert \
+    #         isinstance(MONGO_DB_CLIENT_, pymongo.AsyncMongoClient), \
+    #         "非预期的MongoDB调用, 请检查配置."
+    #     collection = database['dev']
+    #     item = {"context": "Hello World!"}
+
+    #     await collection.insert_one(item)
+    #     result = await collection.find_one(item)
+    #     await collection.delete_one(item)
+    #     await client.close()
+    #     print(result)
+
+    # asyncio.run(test_mongo_db_connect())
+
+    # 测试更新谱面成绩
+    # import asyncio
+
+    # async def test_update_score_guess_jacket():
+    #     assert \
+    #         isinstance(MONGO_DB_CLIENT_, pymongo.AsyncMongoClient), \
+    #         "非预期的MongoDB调用, 请检查配置."
+    #     client = MONGO_DB_CLIENT_
+    #     await LibPjskGuess.update_score_guess_jacket(2, "IMaybeAbu", "dev")
+    #     await client.close()
+    #     print("Done.")
+
+    # asyncio.run(test_update_score_guess_jacket())
+
+    # 测试排行榜
+    import asyncio
+
+    async def test_get_ranking_guess_jacket():
+        assert \
+            isinstance(MONGO_DB_CLIENT_, pymongo.AsyncMongoClient), \
+            "非预期的MongoDB调用, 请检查配置."
+        client = MONGO_DB_CLIENT_
+        guild_id = "dev"
+        data = await LibPjskGuess.get_ranking_guess_jacket(guild_id)
+        info_ranking = await LibPjskGuess.gen_ranking_guess_jacket_info(guild_id, data)
+        await client.close()
+
+        print(info_ranking)
+
+    asyncio.run(test_get_ranking_guess_jacket())
 
     pass
