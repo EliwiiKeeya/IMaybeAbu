@@ -15,6 +15,7 @@ guess_data = LibPjskGuess.load_music_name_data()
 guess_begin = on_type(GuildMessageCreateEvent, rule=fullmatch(("pjsk猜曲", "pjskguess")))
 guess_user_guess = on_type(GuildMessageCreateEvent, rule=startswith("-"))
 guess_user_end = on_type(GuildMessageCreateEvent, rule=fullmatch(("结束猜曲", "結束猜曲", "endpjskguess")))
+guess_get_ranking = on_type(GuildMessageCreateEvent, rule=fullmatch(("猜曲排行", "pjskguessranking")))
 
 def channel_guessing_status_checkout_(event: GuildMessageCreateEvent) -> Snowflake:
     """
@@ -50,6 +51,8 @@ async def handle_guess_begin(event: GuildMessageCreateEvent) -> None:
     channel_id = channel_guessing_status_checkout_(event)
     if channel_guessing_status[channel_id]["is_guessing"]:
         await guess_begin.finish(message_reference + info_on_guessing)
+    else:
+        channel_guessing_status[channel_id]["is_guessing"] = True
 
     # 获取随机封面、裁剪后封面、曲目名称
     jacket, music_names = LibPjskGuess.get_random_jacket()
@@ -69,7 +72,6 @@ async def handle_guess_begin(event: GuildMessageCreateEvent) -> None:
 
     # 发送消息并处理状态
     await guess_begin.send(message_reference + info_begin + jacket_cropped)
-    channel_guessing_status[channel_id]["is_guessing"] = True
     channel_guessing_status[channel_id]["jacket"] = jacket
     channel_guessing_status[channel_id]["music_names"] = music_names
 
@@ -77,7 +79,7 @@ async def handle_guess_begin(event: GuildMessageCreateEvent) -> None:
     handle = channel_guessing_status[channel_id]["is_guessing_sleep_task_handle"]
     if handle is not None and not handle.done():
         handle.cancel()
-    handle = asyncio.create_task(asyncio.sleep(50))
+    handle = asyncio.create_task(asyncio.sleep(60))
     channel_guessing_status[channel_id]["is_guessing_sleep_task_handle"] = handle
     await handle
 
@@ -87,7 +89,8 @@ async def handle_guess_begin(event: GuildMessageCreateEvent) -> None:
         channel_guessing_status[channel_id]["music_names"] = None
         channel_guessing_status[channel_id]["is_guessing"] = False
         channel_guessing_status[channel_id]["is_guessing_sleep_task_handle"] = None
-        music_name_edited = LibPjskGuess.get_music_name_for_message(music_names)
+        music_name_edited = LibPjskGuess.get_music_name_for_message(
+            music_names)
         info_end_timeout = f"{info_end_timeout}**{music_name_edited}**"
         await guess_begin.finish(info_end_timeout + jacket)
     else:
@@ -123,15 +126,29 @@ async def handle_guess_user_guess(event: GuildMessageCreateEvent) -> None:
         # 发送用户猜测正确消息
         music_name_edited = LibPjskGuess.get_music_name_for_message(channel_guessing_status[channel_id]["music_names"])
         info_correct = LibPjskGuess.INFO_CORRECT + music_name_edited
-        await guess_user_guess.finish(message_reference + info_correct + jacket)
+        await guess_user_guess.send(message_reference + info_correct + jacket)
 
         # 清理频道猜曲状态
         channel_guessing_status[channel_id]["jacket"] = None
         channel_guessing_status[channel_id]["music_names"] = None
         channel_guessing_status[channel_id]["is_guessing_sleep_task_handle"] = None
+
+        # 获取信息
+        user_id = event.user_id
+        user_name = event.member.nick if event.member.nick else event.author.global_name
+        guild_id = str(event.guild_id)
+        assert isinstance(user_name, str)
+
+        # 更新用户成绩
+        if LibPjskGuess.IS_MONGO_DB_ENABLED:
+            await LibPjskGuess.update_score_guess_jacket(user_id, user_name, guild_id)
+
+        # 结束猜曲
+        await guess_user_guess.finish()
     else:
-        # 发送用户猜测错误信息
-        music_name_edited = LibPjskGuess.get_music_name_for_message(music_names[0])
+        # 发送用户猜测错误信息并结束猜曲
+        music_name_edited = LibPjskGuess.get_music_name_for_message(
+            music_names[0])
         info_incorrect = f"{LibPjskGuess.INFO_INCORRECT}**{music_name_edited}**哦"
         await guess_user_guess.finish(message_reference + info_incorrect)
 
@@ -171,3 +188,35 @@ async def handle_guess_user_end(event: GuildMessageCreateEvent) -> None:
         await guess_user_end.finish(message_reference + info_end_user + jacket)
     else:
         await guess_user_end.finish(message_reference + info_not_on_guessing)
+
+
+@guess_get_ranking.handle()
+async def handle_guess_get_ranking(event: GuildMessageCreateEvent) -> None:
+    # 获取消息引用
+    message_id = event.message_id
+    message_reference = MessageReference(message_id=message_id)
+    message_reference = MessageSegment.reference(message_reference)
+
+    # 获取排行榜数据
+    guild_id = str(event.guild_id)
+    data = await LibPjskGuess.get_ranking_guess_jacket(guild_id)
+
+    # 构建排行榜信息
+    info_ranking = await LibPjskGuess.gen_ranking_guess_jacket_info(guild_id, data)
+
+    # 构建用户信息
+    user_id = event.user_id
+    for i, data in enumerate(data):
+        if user_id == data["user_id"]:
+            info_user = f'\n\n您的排名:{i + 1:>8} 位\n猜中次数:{data["score_guess_jacket"]:>8} 次'
+            break
+    else:
+        info_user = f"\n\n您的排名: 暂无排名"
+
+    await guess_user_end.finish(
+        message_reference +
+        "```python\n" +
+        info_ranking +
+        info_user +
+        "\n```"
+    )

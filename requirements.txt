@@ -3,8 +3,10 @@ nb-cli
 nonebot-adapter-discord
 nonebot2[httpx]
 nonebot2[websockets]
-opencv-python
+
+ujson
 qrcode
 pillow
-ujson
 opencc
+pymongo
+opencv-python
