@@ -18,12 +18,12 @@ with open(PATH_METADATA_, 'r', encoding='utf-8') as f:
 
 # MongoDB 数据库配置 (可选, 猜曲排行依赖)
 MONGO_DB_URI_ = ""
-MONGO_DB_CLIENT_: Optional[pymongo.AsyncMongoClient]
+MONGO_DB_CLIENT_: Optional[pymongo.AsyncMongoClient] = None
 if MONGO_DB_URI_:
     try:
         MONGO_DB_CLIENT_ = pymongo.AsyncMongoClient(MONGO_DB_URI_)
     except:
-        MONGO_DB_CLIENT_ = None
+        pass
 
 
 class LibPJSKGuess(Exception):
