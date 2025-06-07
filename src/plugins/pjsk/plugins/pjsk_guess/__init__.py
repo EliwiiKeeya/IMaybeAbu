@@ -29,7 +29,7 @@ guess_user_end = on_type(
 guess_get_ranking = on_type(
     GuildMessageCreateEvent,
     rule=fullmatch(("猜曲排行", "pjskguessranking"))
-)
+) if LibPJSKGuess.IS_MONGO_DB_ENABLED else None
 
 
 def channel_guessing_status_checkout_(event: GuildMessageCreateEvent) -> Snowflake:
@@ -195,8 +195,7 @@ async def handle_guess_user_end(event: GuildMessageCreateEvent) -> None:
         # 获取封面和曲目名称
         jacket = channel_guessing_status[channel_id]["jacket"]
         music_names = channel_guessing_status[channel_id]["music_names"]
-        music_name_edited = LibPJSKGuess.get_music_names_for_message(
-            music_names)
+        music_name_edited = LibPJSKGuess.get_music_names_for_message(music_names)
 
         # 清理频道猜曲状态
         channel_guessing_status[channel_id]["jacket"] = None
@@ -209,34 +208,34 @@ async def handle_guess_user_end(event: GuildMessageCreateEvent) -> None:
     else:
         await guess_user_end.finish(message_reference + info_not_on_guessing)
 
+if guess_get_ranking:
+    @guess_get_ranking.handle()
+    async def handle_guess_get_ranking(event: GuildMessageCreateEvent) -> None:
+        # 获取消息引用
+        message_id = event.message_id
+        message_reference = MessageReference(message_id=message_id)
+        message_reference = MessageSegment.reference(message_reference)
 
-@guess_get_ranking.handle()
-async def handle_guess_get_ranking(event: GuildMessageCreateEvent) -> None:
-    # 获取消息引用
-    message_id = event.message_id
-    message_reference = MessageReference(message_id=message_id)
-    message_reference = MessageSegment.reference(message_reference)
+        # 获取排行榜数据
+        guild_id = str(event.guild_id)
+        data = await LibPJSKGuess.get_ranking_guess_jacket(guild_id)
 
-    # 获取排行榜数据
-    guild_id = str(event.guild_id)
-    data = await LibPJSKGuess.get_ranking_guess_jacket(guild_id)
+        # 构建排行榜信息
+        info_ranking = await LibPJSKGuess.gen_ranking_guess_jacket_info(guild_id, data)
 
-    # 构建排行榜信息
-    info_ranking = await LibPJSKGuess.gen_ranking_guess_jacket_info(guild_id, data)
+        # 构建用户信息
+        user_id = event.user_id
+        for i, data in enumerate(data):
+            if user_id == data["user_id"]:
+                info_user = f'\n\n您的排名:{i + 1:>8} 位\n猜中次数:{data["score_guess_jacket"]:>8} 次'
+                break
+        else:
+            info_user = f"\n\n您的排名: 暂无排名"
 
-    # 构建用户信息
-    user_id = event.user_id
-    for i, data in enumerate(data):
-        if user_id == data["user_id"]:
-            info_user = f'\n\n您的排名:{i + 1:>8} 位\n猜中次数:{data["score_guess_jacket"]:>8} 次'
-            break
-    else:
-        info_user = f"\n\n您的排名: 暂无排名"
-
-    await guess_user_end.finish(
-        message_reference +
-        "```python\n" +
-        info_ranking +
-        info_user +
-        "\n```"
-    )
+        await guess_user_end.finish(
+            message_reference +
+            "```python\n" +
+            info_ranking +
+            info_user +
+            "\n```"
+        )
