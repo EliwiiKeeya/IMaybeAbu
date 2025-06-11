@@ -9,7 +9,7 @@ from PIL import Image
 class QRCodeAbu:
     BOX_SIZE = 10
     BORDER = 0
-    IMAGE_PATH = 'src/plugins/qrcode/abu.png'
+    IMAGE_PATH = 'src/plugins/imaybeabu/plugins/qrcode/abu.png'
 
     @staticmethod
     def excute(data):
