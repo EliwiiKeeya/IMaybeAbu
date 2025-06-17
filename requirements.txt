@@ -1,8 +1,8 @@
 pipx
 nb-cli
-nonebot-adapter-discord
 nonebot2[httpx]
 nonebot2[websockets]
+git+https://github.com/EliwiiKeeya/nonebot-adapter-discord.git@master
 
 ujson
 qrcode
