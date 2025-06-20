@@ -7,7 +7,7 @@ from nonebot import on_type, get_adapter
 from nonebot.adapters.discord import (
     Bot,
     Adapter,
-    MessageSegment,    
+    MessageSegment,
     GuildMessageCreateEvent,
     GuildMessageReactionAddEvent,
     MessageComponentInteractionEvent,
@@ -20,7 +20,7 @@ from nonebot.adapters.discord.api import (
     MessageFlag,
     ComponentEmoji,
     SubCommandOption,
-    ComponentType,    
+    ComponentType,
     SelectMenu,
     SelectOption,
     API_HANDLERS
@@ -36,6 +36,7 @@ create_reaction = API_HANDLERS["create_reaction"]
 delete_own_reaction = API_HANDLERS["delete_own_reaction"]
 get_guild_member = API_HANDLERS["get_guild_member"]
 get_channel_messages = API_HANDLERS["get_channel_messages"]
+
 
 class AddReactSessionStatus(TypedDict):
     """
@@ -329,7 +330,7 @@ async def handle_react_remove(
         )
     )
     session = await react.send_followup_msg(
-        "请选择你要删除的表情符号." + select        
+        "请选择你要删除的表情符号." + select
     )
 
     # 初始化并更新状态
@@ -380,7 +381,7 @@ async def handle_react_service(bot: Bot, event: GuildMessageCreateEvent) -> None
     # 检查用户是否具有反应任务, 没有则结束事件
     if pool_react_tasks[guild_id].get(user_id) is None:
         await react_service.finish()
-    
+
     # 获取上次消息
     last_message: MessageGet = (
         await get_channel_messages(
@@ -391,14 +392,14 @@ async def handle_react_service(bot: Bot, event: GuildMessageCreateEvent) -> None
             limit=1,
         )
     ).pop()
-    
+
     # 如果上次消息的作者ID与用户ID相同, 则删除自己的反应
     if user_id == last_message.author.id:
         for emoji in pool_react_tasks[guild_id][user_id]:
             if isinstance(emoji, MessageSegment):
                 name = emoji.data["name"]
                 emoji_id = emoji.data["id"]
-            
+
             # 如果是字符串, 则直接使用
             else:
                 name = emoji
@@ -545,7 +546,8 @@ async def handle_react_delete_sessions(event: MessageComponentInteractionEvent) 
     )
 
     # 释放会话
-    pool_delete_react_sessions[guild_id][operator_id][session_id]["trigger_react_received"].set()
+    pool_delete_react_sessions[guild_id][operator_id][session_id]["trigger_react_received"] \
+        .set()
     pool_delete_react_sessions[guild_id][operator_id].pop(session_id, None)
 
     # 结束会话状态
