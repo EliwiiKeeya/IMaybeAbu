@@ -60,7 +60,7 @@ class LibPJSKGuess(Exception):
             jacket (PIL.Image.Image): 封面图片.
             music_names (List[str]): 封面对应曲目的名称.
         """
-        PATH_JACKET_CACHE_DIR = "resources/jackets"
+        PATH_JACKET_CACHE_DIR = "resources/pjsk/jackets"
         URL_SEKAI_VIEWER_JACKET = "https://storage.sekai.best/sekai-jp-assets/music/jacket"
 
         # 从元数据中随机选择一个曲目
