@@ -1,8 +1,10 @@
+import os
 import asyncio
+from copy import deepcopy
 from ast import literal_eval
 from typing import TypedDict, List, Dict, Union, Optional
 
-
+import ujson as json
 from nonebot import on_type, get_adapter
 from nonebot.adapters.discord import (
     Bot,
@@ -66,7 +68,7 @@ pool_react_tasks: Dict[
     Snowflake,  # 群组ID
     Dict[
         Snowflake,  # 用户ID
-        List[Union[str, MessageSegment]]  # 反应列表
+        List[Union[str, CustomEmojiSegment]]  # 反应列表
     ]
 ] = {}
 
@@ -91,6 +93,58 @@ pool_delete_react_sessions: Dict[
         ]
     ]
 ] = {}
+
+
+# 尝试读取静态反应任务池
+POOL_REACT_TASKS_STATIC = "resources/imaybeabu/pool_react_tasks_static.json"
+if os.path.exists(POOL_REACT_TASKS_STATIC):
+    try:
+        with open(POOL_REACT_TASKS_STATIC, "r", encoding="utf-8") as f:
+            data = json.load(f)
+
+        # 转换键为Snowflake类型
+        data = {
+            Snowflake(guild_id): {
+                Snowflake(user_id): value
+                for user_id, value in users.items()
+            }
+            for guild_id, users in data.items()
+        }
+
+        # 如果是字典格式的表情符号, 转换为 CustomEmojiSegment
+        for guild_id in data.keys():
+            for user_id in data[guild_id].keys():
+                for i, emoji in enumerate(data[guild_id][user_id]):
+                    if isinstance(emoji, dict) and "id" in emoji:
+                        data[guild_id][user_id][i] = MessageSegment.custom_emoji(
+                            emoji_id=emoji["id"],
+                            name=emoji["name"],
+                            animated=emoji.get("animated", None)
+                        )
+
+        # 将数据加载到全局变量中
+        pool_react_tasks = data
+    except:
+        pass
+
+
+def save_react_tasks() -> None:
+    """
+    保存反应任务池到静态文件.
+    """
+    global pool_react_tasks
+    os.makedirs(os.path.dirname(POOL_REACT_TASKS_STATIC), exist_ok=True)
+
+    # 将 CustomEmojiSegment 转换为字典格式
+    data: dict = deepcopy(pool_react_tasks)
+    for guild_id in data.keys():
+        for user_id in data[guild_id].keys():
+            for i, emoji in enumerate(data[guild_id][user_id]):
+                if isinstance(emoji, CustomEmojiSegment):
+                    data[guild_id][user_id][i] = emoji.data
+
+    with open(POOL_REACT_TASKS_STATIC, "w", encoding="utf-8") as f:
+        json.dump(data, f, ensure_ascii=False, indent=4)
 
 
 # 命令响应器
@@ -229,6 +283,9 @@ async def handle_react_add(event: ApplicationCommandInteractionEvent, user: Comm
             session.id,
             "将自动为" + msg_user + "添加反应: " + emoji
         )
+
+        # 保存反应任务池到文件
+        save_react_tasks()
 
     # not trigger.is_set()
     else:
@@ -518,7 +575,7 @@ async def handle_react_delete_sessions(event: MessageComponentInteractionEvent) 
     # 删除所有反应
     if "all" in event.data.values:
         pool_react_tasks[guild_id].pop(user_id, None)
-        await react_delete_sessions.finish(
+        await react_delete_sessions.send(
             "已为" + msg_user + "删除所有自动添加的反应."
         )
 
@@ -540,15 +597,18 @@ async def handle_react_delete_sessions(event: MessageComponentInteractionEvent) 
         if pool_react_tasks[guild_id][user_id] == []:
             pool_react_tasks[guild_id].pop(user_id, None)
 
-    msg_emoji = " ".join([str(emoji) for emoji in emojis])
-    await react_delete_sessions.send(
-        "已为" + msg_user + "删除自动添加的反应: " + msg_emoji
-    )
+        msg_emoji = " ".join([str(emoji) for emoji in emojis])
+        await react_delete_sessions.send(
+            "已为" + msg_user + "删除自动添加的反应: " + msg_emoji
+        )
 
     # 释放会话
     pool_delete_react_sessions[guild_id][operator_id][session_id]["trigger_react_received"] \
         .set()
     pool_delete_react_sessions[guild_id][operator_id].pop(session_id, None)
+
+    # 保存反应任务池到文件
+    save_react_tasks()
 
     # 结束会话状态
     await react_delete_sessions.finish()
