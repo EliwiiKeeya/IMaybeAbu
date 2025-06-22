@@ -9,7 +9,7 @@ driver = nonebot.get_driver()
 driver.register_adapter(DiscordAdapter)
 
 # 在这里加载插件
-nonebot.load_builtin_plugins("echo")  # 内置插件
+# nonebot.load_builtin_plugins("echo")  # 内置插件
 # nonebot.load_plugin("thirdparty_plugin")  # 第三方插件
 nonebot.load_plugins("src/plugins")  # 本地插件
 
