@@ -16,11 +16,13 @@ class PJSKGuessStatus(TypedDict):
         resource (Any): 资源内容.
         music_names (Optional[List[str]]): 猜曲名称列表.
         user_guess_event (Optional[asyncio.Event]): 用户猜测正确事件.
+        score_name (Optional[str]): 分数名称, 用于记录猜曲成绩.
     """
     is_guessing: bool
     resource: Any
     music_names: Optional[List[str]]
     user_guess_event: Optional[asyncio.Event]
+    score_name: Optional[str]
 
 
 class PJSKGuessStatusManager:
@@ -68,7 +70,8 @@ class PJSKGuessStatusManager:
             "is_guessing": False,
             "resource": None,
             "music_names": None,
-            "user_guess_event": None
+            "user_guess_event": None,
+            "score_name": None
         }
 
 
@@ -162,7 +165,10 @@ class PJSKGuessBase(ABC):
     METADATA: PJSKGuessMetadata
 
     # 数据库句柄
-    database: Optional[PJSKGuessDatabaseBase] = None
+    database: Optional[PJSKGuessDatabaseBase]
+
+    # 分数键名
+    SCORE_NAME: str
 
     @abstractmethod
     def __init__(
@@ -178,9 +184,7 @@ class PJSKGuessBase(ABC):
             metadata (dict): 元数据字典.
             database (Optional[PJSKGuessDatabaseBase]): 数据库实例, 默认为None.
         """
-        self.status_manager = status_manager
-        self.METADATA = metadata
-        self.database = database
+        pass
 
     @abstractmethod
     def get_resource(self, channel_id: int) -> Tuple[Any, List[str]]:
@@ -228,5 +232,12 @@ class PJSKGuessBase(ABC):
         处理猜曲结束事件.
         Args:
             event (Any): 事件对象, 包含结束猜曲信息.
+        """
+        pass
+
+    @abstractmethod
+    def _register_matchers(self) -> None:
+        """
+        注册事件响应器, 在构造函数中调用.
         """
         pass

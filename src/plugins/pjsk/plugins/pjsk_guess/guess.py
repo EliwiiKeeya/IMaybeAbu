@@ -6,8 +6,6 @@ from io import BytesIO
 from typing import Type, Tuple, List, Optional
 
 import PIL.Image
-import ujson as json
-
 from nonebot import on_type
 from nonebot.matcher import Matcher
 from nonebot.rule import startswith, fullmatch
@@ -47,6 +45,9 @@ class PJSKGuess(PJSKGuessBase):
     # 元数据
     METADATA: Metadata
 
+    # 分数键名
+    SCORE_NAME = "score_guess_jacket"
+
     # 事件响应器
     match_user_begin: Type[Matcher]
     match_user_guess: Type[Matcher]
@@ -66,32 +67,11 @@ class PJSKGuess(PJSKGuessBase):
             metadata (Optional[Metadata]): 曲目元数据实例, 如果为None则加载默认元数据.
             database (Optional[Database]): 数据库实例, 用于存储和获取猜曲
         """
-        super().__init__(
-            status_manager,
-            metadata,
-            database
-        )
-        self.match_user_begin = on_type(
-            GuildMessageCreateEvent,
-            rule=fullmatch(("pjsk猜曲", "pjskguess")),
-            handlers=[self.handle_user_begin]
-        )
-        self.match_user_guess = on_type(
-            GuildMessageCreateEvent,
-            rule=startswith("-"),
-            handlers=[self.handle_user_guess]
-        )
-        self.match_user_end = on_type(
-            GuildMessageCreateEvent,
-            rule=fullmatch(("结束猜曲", "結束猜曲", "endpjskguess")),
-            handlers=[self.handle_user_end]
-        )
-        if self.database is not None:
-            self.match_user_get_ranking = on_type(
-                GuildMessageCreateEvent,
-                rule=fullmatch(("猜曲排行")),
-                handlers=[self.handle_user_get_ranking]
-            )
+        super().__init__(status_manager, metadata, database)
+        self.status_manager = status_manager
+        self.METADATA = metadata
+        self.database = database
+        self._register_matchers()
 
     def get_resource(self) -> Tuple[PIL.Image.Image, List[str]]:
         """
@@ -187,7 +167,8 @@ class PJSKGuess(PJSKGuessBase):
                 "is_guessing": True,
                 "resource": jacket,
                 "music_names": music_names,
-                "user_guess_event": handle
+                "user_guess_event": handle,
+                "score_name": self.SCORE_NAME
             }
         )
 
@@ -225,6 +206,8 @@ class PJSKGuess(PJSKGuessBase):
                 "频道正处于猜曲时必须具有 user_guess_event 句柄."
             assert status["user_guess_event"].is_set() is False, \
                 "频道正处于猜曲时 user_guess_event 句柄不应被置位."
+            assert status["score_name"] is not None, \
+                "频道正处于猜曲时必须具有 score_name 键"
 
         # 获取消息引用
         message_id = event.message_id
@@ -268,7 +251,8 @@ class PJSKGuess(PJSKGuessBase):
             if self.database is not None:
                 await self.database.update(
                     user_id=user_id,
-                    guild_id=guild_id
+                    guild_id=guild_id,
+                    key=status["score_name"]
                 )
 
             # 结束猜曲
@@ -355,21 +339,19 @@ class PJSKGuess(PJSKGuessBase):
 
         # 获取排行榜数据
         guild_id = event.guild_id
-        data = await self.database.get_ranking_data(
-            guild_id=guild_id,
-            limit=20
-        )
+        data = await self.database.get_ranking_data(guild_id=guild_id, key=self.SCORE_NAME)
 
         # 构建排行榜信息
-        info_ranking = await self.database.generate_ranking(guild_id, data)
+        info_ranking = await self.database.generate_ranking(guild_id, data, key=self.SCORE_NAME)
 
+        # TODO: 用户不在排行榜时获取猜中次数
         # 构建用户信息
         user_id = event.user_id
         for i, data in enumerate(data):
             if user_id == data["user_id"]:
                 info_user = (
                     f'\n\n您的排名:{i + 1:>8} 位\n'
-                    f'猜中次数:{data["score_guess_jacket"]:>8} 次'
+                    f'猜中次数:{data[self.SCORE_NAME]:>8} 次'
                 )
                 break
         else:
@@ -382,3 +364,32 @@ class PJSKGuess(PJSKGuessBase):
             info_user +
             "\n```"
         )
+
+    def _register_matchers(self) -> None:
+        """
+        注册事件响应器, 在构造函数中调用.
+        """
+        if type(self) is not PJSKGuess:
+            raise NotImplementedError("子类必须自行实现 _register_matchers 方法.")
+
+        self.match_user_begin = on_type(
+            GuildMessageCreateEvent,
+            rule=fullmatch(("pjsk猜曲", "pjskguess")),
+            handlers=[self.handle_user_begin]
+        )
+        self.match_user_guess = on_type(
+            GuildMessageCreateEvent,
+            rule=startswith("-"),
+            handlers=[self.handle_user_guess]
+        )
+        self.match_user_end = on_type(
+            GuildMessageCreateEvent,
+            rule=fullmatch(("结束猜曲", "結束猜曲", "endpjskguess")),
+            handlers=[self.handle_user_end]
+        )
+        if self.database is not None:
+            self.match_user_get_ranking = on_type(
+                GuildMessageCreateEvent,
+                rule=fullmatch(("猜曲排行")),
+                handlers=[self.handle_user_get_ranking]
+            )

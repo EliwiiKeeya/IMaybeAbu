@@ -2,7 +2,7 @@
 
 import pymongo
 from pymongo import AsyncMongoClient
-from nonebot import on_type, get_adapter, get_bot
+from nonebot import get_adapter, get_bot
 from nonebot.adapters.discord.api import GuildMember, API_HANDLERS
 
 from .base import PJSKGuessDatabaseBase as DatabaseBase
@@ -17,26 +17,26 @@ class PJSKGuessDatabase(DatabaseBase, AsyncMongoClient):
     用于更新和获取猜曲成绩数据.
     """
 
-    def __init__(self, uri: str, score_name: str = "score_guess_jacket") -> None:
+    def __init__(self, uri: str) -> None:
         """
         初始化MongoDB连接.
         Args:
             uri (str): MongoDB连接URI.
-            score_name (str): 关键字, 用于指定分数名称.
         """
         AsyncMongoClient.__init__(self, uri)
-        self._key = score_name
 
     async def update(
         self,
         guild_id: int,
-        user_id: int
+        user_id: int,
+        key: str
     ):
         """
         更新状态.
         Args:
             user_id (int): 用户ID.            
             guild_id (str): 服务器ID.
+            key (str): 要更新分数对应的键.
         """
         # 查找用户字段
         collection = self["PJSK-Guess"][str(guild_id)]
@@ -44,21 +44,21 @@ class PJSKGuessDatabase(DatabaseBase, AsyncMongoClient):
 
         # 更新猜谱面成绩
         if data is not None:
-            if self._key in data.keys():
+            if key in data.keys():
                 await collection.update_one(
                     data,
                     {
                         "$set": {
-                            self._key: data["score_guess_jacket"] + 1
+                            key: data[key] + 1
                         }
                     }
                 )
-            else:  # self._key not in data.keys()
+            else:  # key not in data.keys()
                 await collection.update_one(
                     data,
                     {
                         "$set": {
-                            self._key: 1
+                            key: 1
                         }
                     }
                 )
@@ -68,13 +68,14 @@ class PJSKGuessDatabase(DatabaseBase, AsyncMongoClient):
             await collection.insert_one(
                 {
                     "user_id": user_id,
-                    self._key: 1
+                    key: 1
                 }
             )
 
     async def get_ranking_data(
         self,
         guild_id: int,
+        key: str,
         limit: int = 20
     ) -> list[dict[str, Any]]:
         """
@@ -82,12 +83,13 @@ class PJSKGuessDatabase(DatabaseBase, AsyncMongoClient):
         Args:
             guild_id (int): 群组ID.
             limit (int): 排行榜限制数量, 默认为20.
+            key (str): 排行榜分数对应的键.
         Returns:
             data (List[Dict[str, Any]]): 群组前20名排行字典列表.
         """
         collection = self["PJSK-Guess"][str(guild_id)]
-        cursor = collection.find() \
-                           .sort(self._key, pymongo.DESCENDING) \
+        cursor = collection.find({key: {"$exists": True}}) \
+                           .sort(key, pymongo.DESCENDING) \
                            .limit(limit)
         data = cursor.to_list()
         return await data
@@ -95,13 +97,15 @@ class PJSKGuessDatabase(DatabaseBase, AsyncMongoClient):
     async def generate_ranking(
         self,
         guild_id: int,
-        data: list[dict[str, Any]]
+        data: list[dict[str, Any]],
+        key: str
     ) -> str:
         """
         生成猜谱面成绩排行.
         Args:
             guild_id (int): 群组ID.
             data (List[Dict[str, Any]]): 群组前20名排行字典列表.
+            key (str): 排行榜分数对应的键.
         Returns:
             ranking (str): 群组前20名排行信息.
         """
@@ -117,7 +121,7 @@ class PJSKGuessDatabase(DatabaseBase, AsyncMongoClient):
             info_ranking += (
                 f"{str(i + 1):>4}"
                 "  "
-                f"{str(item[self._key]) + ' 次':>8}"
+                f"{str(item[key]) + ' 次':>8}"
                 "      "
                 f"{user_name}\n"
             )
