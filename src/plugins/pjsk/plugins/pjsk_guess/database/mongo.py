@@ -38,39 +38,12 @@ class PJSKGuessDatabase(DatabaseBase, AsyncMongoClient):
             guild_id (str): 服务器ID.
             key (str): 要更新分数对应的键.
         """
-        # 查找用户字段
         collection = self["PJSK-Guess"][str(guild_id)]
-        data = await collection.find_one({"user_id": user_id})
-
-        # 更新猜谱面成绩
-        if data is not None:
-            if key in data.keys():
-                await collection.update_one(
-                    data,
-                    {
-                        "$set": {
-                            key: data[key] + 1
-                        }
-                    }
-                )
-            else:  # key not in data.keys()
-                await collection.update_one(
-                    data,
-                    {
-                        "$set": {
-                            key: 1
-                        }
-                    }
-                )
-
-        # data IS None
-        else:
-            await collection.insert_one(
-                {
-                    "user_id": user_id,
-                    key: 1
-                }
-            )
+        await collection.update_one(
+            {"user_id": user_id},
+            {"$inc": {key: 1}},
+            upsert=True
+        )
 
     async def get_ranking_data(
         self,
