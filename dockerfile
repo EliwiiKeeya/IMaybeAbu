@@ -6,6 +6,7 @@ COPY . .
 RUN apt update
 RUN apt install git -y
 RUN apt install libgl-dev libglib2.0-0 -y
+RUN apt install ffmpeg -y
 RUN apt clean
 
 RUN pip3 install -r requirements.txt

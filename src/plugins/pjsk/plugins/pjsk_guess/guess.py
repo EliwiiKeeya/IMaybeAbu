@@ -297,7 +297,7 @@ class PJSKGuess(PJSKGuessBase):
             assert status["music_names"] is not None, \
                 "频道正处于猜曲时必须具有 music_names."
 
-            jacket = status["resource"]
+            resource = status["resource"]
             music_names = status["music_names"]
             music_name_edited = self.METADATA.generate_message(music_names)
 
@@ -309,7 +309,7 @@ class PJSKGuess(PJSKGuessBase):
                 message_reference
                 + self.INFO_END
                 + music_name_edited
-                + jacket
+                + resource
             )
 
         # status["is_guessing"] IS False

@@ -5,6 +5,7 @@ nonebot2[websockets]
 git+https://github.com/EliwiiKeeya/nonebot-adapter-discord.git@master
 
 ujson
+pydub
 qrcode
 pillow
 opencc
