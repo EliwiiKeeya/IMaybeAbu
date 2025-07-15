@@ -9,5 +9,6 @@ pydub
 qrcode
 pillow
 opencc
+aiohttp
 pymongo
 opencv-python

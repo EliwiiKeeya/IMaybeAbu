@@ -1,6 +1,7 @@
 ﻿import os
 import random
 import asyncio
+import aiohttp
 import requests
 from io import BytesIO
 from typing import List, Optional, Tuple
@@ -57,7 +58,7 @@ class PJSKGuessMusic(PJSKGuess):
         """
         super().__init__(status_manager, metadata, database)
 
-    def get_resource(self) -> Tuple[PIL.Image.Image, pydub.AudioSegment, List[str]]:
+    async def get_resource(self) -> Tuple[PIL.Image.Image, pydub.AudioSegment, List[str]]:
         """
         随机获取一个曲目的封面和音频.
         Returns:
@@ -91,30 +92,15 @@ class PJSKGuessMusic(PJSKGuess):
             )
 
         # 检查音频文件是否已缓存，如果不存在则从sekaiviewer下载
-        file_names = [
-            f"/se_{music_id:0>4}_01/se_{music_id:0>4}_01.mp3",
-            f"/vs_{music_id:0>4}_01/vs_{music_id:0>4}_01.mp3",
-            f"/{music_id:0>4}_01/{music_id:0>4}/01.mp3"
-        ]
-
         if os.path.exists(self.PATH_CACHE_DIR_MUSIC + f"/{music_id}_01.mp3"):
             music = pydub.AudioSegment.from_mp3(
                 self.PATH_CACHE_DIR_MUSIC + f"/{music_id}_01.mp3")
         else:
-            for file_name in file_names:
-                url = self.URL_SEIKAI_VIEWER_MUSIC + file_name
-                try:
-                    src = requests.get(url, timeout=10)
-                    src.raise_for_status()
-                except:
-                    continue
-                raw = BytesIO(src.content)
-                music: pydub.AudioSegment = pydub.AudioSegment.from_mp3(raw)
-                music.export(
-                    self.PATH_CACHE_DIR_MUSIC + f"/{music_id}_01.mp3",
-                    format="mp3"
-                )
-                break
+            music = await self._get_remote_music(music_id)
+            music.export(
+                self.PATH_CACHE_DIR_MUSIC + f"/{music_id}_01.mp3",
+                format="mp3"
+            )
 
         return jacket, music, music_names
 
@@ -161,7 +147,7 @@ class PJSKGuessMusic(PJSKGuess):
             )
 
         # 获取封面、音频和曲目名称
-        jacket, music, music_names = self.get_resource()
+        jacket, music, music_names = await self.get_resource()
         music_cropped = self.process_resource(music)
 
         # 将封面转换为 message
@@ -229,3 +215,39 @@ class PJSKGuessMusic(PJSKGuess):
                 rule=fullmatch(("听歌猜曲排行", "聽歌猜曲排行")),
                 handlers=[self.handle_user_get_ranking]
             )
+
+    async def _get_remote_music(self, music_id) -> pydub.AudioSegment:
+        """
+        获取远程音乐.
+        在get_resource方法中调用.
+        Args:
+            music_id (int): 元数据中的音乐ID.
+        Returns:
+            pydub.AudioSegment: 音乐片段.
+        """
+        file_names = [
+            f"/se_{music_id:0>4}_01/se_{music_id:0>4}_01.mp3",
+            f"/vs_{music_id:0>4}_01/vs_{music_id:0>4}_01.mp3",
+            f"/{music_id:0>4}_01/{music_id:0>4}/01.mp3"
+        ]
+
+        async with aiohttp.ClientSession() as session:
+            requests_ = [
+                session.get(self.URL_SEIKAI_VIEWER_MUSIC + file_name)
+                for file_name in file_names
+            ]
+            tasks = [asyncio.create_task(request) for request in requests_]            
+
+            for idx, task in enumerate(tasks):
+                response = await task
+                if response.status == 200:
+                    raw = BytesIO(await response.read())                    
+                    music = pydub.AudioSegment.from_mp3(raw)
+
+                    # 释放资源
+                    for task in tasks[idx + 1:]:
+                        task.cancel()
+
+                    return music
+            else:
+                raise FileNotFoundError(f"资源请求失败: {music_id}")
