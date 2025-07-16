@@ -228,7 +228,7 @@ class PJSKGuessMusic(PJSKGuess):
         file_names = [
             f"/se_{music_id:0>4}_01/se_{music_id:0>4}_01.mp3",
             f"/vs_{music_id:0>4}_01/vs_{music_id:0>4}_01.mp3",
-            f"/{music_id:0>4}_01/{music_id:0>4}/01.mp3"
+            f"/{music_id:0>4}_01/{music_id:0>4}_01.mp3"
         ]
 
         async with aiohttp.ClientSession() as session:
@@ -236,18 +236,20 @@ class PJSKGuessMusic(PJSKGuess):
                 session.get(self.URL_SEIKAI_VIEWER_MUSIC + file_name)
                 for file_name in file_names
             ]
-            tasks = [asyncio.create_task(request) for request in requests_]            
+            tasks = [asyncio.create_task(request) for request in requests_]
 
-            for idx, task in enumerate(tasks):
-                response = await task
-                if response.status == 200:
-                    raw = BytesIO(await response.read())                    
-                    music = pydub.AudioSegment.from_mp3(raw)
+            # 至多重试3次
+            for _ in range(3):
+                for idx, task in enumerate(tasks):
+                    response = await task
+                    if response.status == 200:
+                        raw = BytesIO(await response.read())
+                        music = pydub.AudioSegment.from_mp3(raw)
 
-                    # 释放资源
-                    for task in tasks[idx + 1:]:
-                        task.cancel()
+                        # 释放资源
+                        for task in tasks[idx + 1:]:
+                            task.cancel()
 
-                    return music
+                        return music
             else:
                 raise FileNotFoundError(f"资源请求失败: {music_id}")
