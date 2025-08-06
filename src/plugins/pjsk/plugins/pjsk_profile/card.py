@@ -1,4 +1,7 @@
-﻿from io import BytesIO
+﻿import os
+import requests
+import ujson as json
+from io import BytesIO
 
 from PIL import Image, ImageDraw, ImageFont
 
@@ -8,10 +11,19 @@ assets = "src/plugins/pjsk/plugins/pjsk_profile/assets"
 
 
 class PJSKProfileCard(BytesIO):
+    PATH_CACHE_DIR = "resources/pjsk/thumbnail/chara"
+    PATH_METADATA = "src/plugins/pjsk/plugins/pjsk_profile/metadata.json"
+    URL_SEIKAI_VIEWER = "https://storage.sekai.best/sekai-jp-assets/thumbnail/chara"
+
+    if not os.path.exists(PATH_CACHE_DIR):
+        os.makedirs(PATH_CACHE_DIR, exist_ok=True)
+
+    with open(PATH_METADATA, "r", encoding="utf-8") as f:
+        metadata = json.load(f)
+
     def __init__(self, profile: PJSKProfileContentBase):
         # 读取卡片资源
-        img = Image.open(
-            f"{assets}/card.png")
+        img = Image.open(f"{assets}/card.png")
         draw = ImageDraw.Draw(img)
 
         # 绘制用户名
@@ -82,6 +94,55 @@ class PJSKProfileCard(BytesIO):
                 fill=(0, 0, 0),
                 font=font_style
             )
+
+        # 绘制队伍组合
+        member_leader = profile.userDeck.leader
+        for idx, member, default_image in zip(
+            range(5),
+            [
+                profile.userDeck.member1,
+                profile.userDeck.member2,
+                profile.userDeck.member3,
+                profile.userDeck.member4,
+                profile.userDeck.member5
+            ],
+            [
+                user_card.defaultImage
+                for user_card in profile.userCards
+            ]
+        ):
+            asset_bundle_name = self.metadata.get(str(member))
+            if default_image == "original":
+                file_name = f"{asset_bundle_name}_normal.png"
+            elif default_image == "special_training":
+                file_name = f"{asset_bundle_name}_after_training.png"
+            else:
+                raise ValueError(
+                    f"Unknown default image type: {default_image}")
+
+            # 检查角色缩略图是否已缓存，如果不存在则从sekaiviewer下载
+            file_dir = f"{self.PATH_CACHE_DIR}/{file_name}"
+            if os.path.exists(file_dir):
+                card_img = Image.open(file_dir)
+            else:
+                url = f"{self.URL_SEIKAI_VIEWER}/{file_name}"
+                src = requests.get(url, timeout=10)
+                raw = BytesIO(src.content)
+                card_img = Image.open(raw)
+                card_img.save(
+                    file_dir,
+                    format="png"
+                )
+
+            # 绘制于对应位置
+            mask = card_img.getchannel("A")
+            img.paste(card_img, (111 + 128 * idx, 488), mask)
+
+            # 绘制用户头像
+            if member == member_leader:
+                card_img = card_img.resize((151, 151))
+                mask = card_img.getchannel("A")
+                img.paste(card_img, (118, 51), mask)
 
         # 绘制 Easy ~ Master 统计数据
         font_style = ImageFont.truetype(
@@ -218,12 +279,23 @@ class PJSKProfileCard(BytesIO):
         )
 
         # 绘制挑战 Live 结果
+        chara = Image.open(
+            f'{assets}/chara/'
+            f'chr_ts_{profile.userChallengeLiveSoloResult.characterId}.png'
+        )
+        chara = chara.resize((70, 70))
+        mask = chara.getchannel("A")
+        img.paste(chara, (952, 293), mask)
+
         draw.text(
             (1032, 315),
             str(profile.userChallengeLiveSoloResult.highScore),
             fill=(0, 0, 0),
             font=font_style
         )
+
+        # 绘制用户称号
+        # TODO: 以后再说
 
         # 保存图片到 BytesIO
         super().__init__()
