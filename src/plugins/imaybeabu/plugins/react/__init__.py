@@ -5,7 +5,7 @@ from ast import literal_eval
 from typing import TypedDict, List, Dict, Union, Optional
 
 import ujson as json
-from nonebot import on_type, get_adapter
+from nonebot import logger, on_type, get_adapter
 from nonebot.adapters.discord import (
     Bot,
     Adapter,
@@ -33,6 +33,41 @@ from nonebot.adapters.discord.commands import (
 )
 from nonebot.adapters.discord.api.model import Snowflake
 from nonebot.adapters.discord.message import CustomEmojiSegment
+
+
+DB_ENABLED = False
+DB_USERNAME: Optional[str] = None
+DB_PASSWORD: Optional[str] = None
+DB_HOST: Optional[str] = None
+REACT_DB_URI: Optional[str] = None
+
+if bool(os.getenv("REACT_ENABLE_DB_MONGO")):
+    # 从环境变量中获取 MongoDB 连接信息
+    DB_ENABLED = True
+    DB_USERNAME = os.getenv("REACT_DB_USERNAME")
+    DB_PASSWORD = os.getenv("REACT_DB_PASSWORD")
+    DB_HOST = os.getenv("REACT_DB_HOST")
+    REACT_DB_URI = (
+        "mongodb+srv://"
+        f"{DB_USERNAME}:{DB_PASSWORD}"
+        f"@{DB_HOST}"
+    )
+
+    # 尝试连接 MongoDB 数据库
+    if DB_USERNAME and DB_PASSWORD and DB_HOST:
+        from pymongo import MongoClient
+        database = MongoClient(REACT_DB_URI)["IMaybeAbu"]
+
+    # not REACT_DB_USERNAME and REACT_DB_PASSWORD and REACT_DB_HOST
+    # 如果连接信息不完整, 则记录警告并不启用数据库支持
+    else:
+        DB_ENABLED = False
+        logger.warning(
+            "[ImaybeAbu.React] "
+            "启用了 MongoDB 数据库支持,"
+            "但未正确加载用户名,密码或地址,"
+            "将**不会**启用 MongoDB 数据库支持."
+        )
 
 create_reaction = API_HANDLERS["create_reaction"]
 delete_own_reaction = API_HANDLERS["delete_own_reaction"]
@@ -95,12 +130,20 @@ pool_delete_react_sessions: Dict[
 ] = {}
 
 
-# 尝试读取静态反应任务池
+# 尝试读取反应任务池
 POOL_REACT_TASKS_STATIC = "resources/imaybeabu/pool_react_tasks_static.json"
-if os.path.exists(POOL_REACT_TASKS_STATIC):
+if True:
     try:
-        with open(POOL_REACT_TASKS_STATIC, "r", encoding="utf-8") as f:
-            data = json.load(f)
+        if DB_ENABLED and database is not None:
+            # 从 MongoDB 数据库加载反应任务池
+            collection = database["React"]
+            data = collection.find_one({}, {"_id": 0})
+            if data is None:
+                data = {}
+
+        elif os.path.exists(POOL_REACT_TASKS_STATIC):
+            with open(POOL_REACT_TASKS_STATIC, "r", encoding="utf-8") as f:
+                data = json.load(f)
 
         # 转换键为Snowflake类型
         data = {
@@ -124,8 +167,15 @@ if os.path.exists(POOL_REACT_TASKS_STATIC):
 
         # 将数据加载到全局变量中
         pool_react_tasks = data
-    except:
-        pass
+    except Exception as e:
+        DB_ENABLED = False
+        logger.warning(
+            "[ImaybeAbu.React]"
+            "无法加载反应任务池,"
+            "将使用空池."
+            "错误信息: "
+            + str(e)
+        )
 
 
 def save_react_tasks() -> None:
@@ -143,8 +193,16 @@ def save_react_tasks() -> None:
                 if isinstance(emoji, CustomEmojiSegment):
                     data[guild_id][user_id][i] = emoji.data
 
-    with open(POOL_REACT_TASKS_STATIC, "w", encoding="utf-8") as f:
-        json.dump(data, f, ensure_ascii=False, indent=4)
+    if DB_ENABLED and database is not None:
+        # json 编码
+        data = json.loads(json.dumps(data))
+
+        # 将反应任务池保存到 MongoDB 数据库
+        collection = database["React"]
+        collection.update_one({}, {"$set": data}, upsert=True)
+    else:
+        with open(POOL_REACT_TASKS_STATIC, "w", encoding="utf-8") as f:
+            json.dump(data, f, ensure_ascii=False, indent=4)
 
 
 # 命令响应器
